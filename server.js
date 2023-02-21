@@ -2,7 +2,7 @@
 import fs from "fs";
 import path from "path";
 import { performance } from "perf_hooks";
-import request from "request";
+import fetch from "node-fetch";
 import { URL } from "url";
 
 import chokidar from "chokidar";
@@ -471,27 +471,19 @@ const serveResult = (result, fileName, res, next) => {
       proxy = upstreamProxy;
     }
 
-    // encoding : null means "body" passed to the callback will be raw bytes
-
-    request.get(
-      {
-        url: remoteUrl.toString(),
-        headers: filterHeaders(req, req.headers),
-        encoding: null,
-        proxy: proxy,
-      },
-      //eslint-disable-next-line no-unused-vars
-      function (error, response, body) {
-        let code = 500;
-
-        if (response) {
-          code = response.statusCode;
-          res.header(filterHeaders(req, response.headers));
-        }
-
-        res.status(code).send(body);
-      }
-    );
+    let statusCode = 500;
+    fetch(remoteUrl.toString(), {
+      headers: filterHeaders(req, req.headers),
+      agent: proxy,
+    })
+      .then((responseStream) => {
+        statusCode = responseStream.status;
+        res.header(filterHeaders(req, responseStream.headers));
+        return responseStream.json();
+      })
+      .then((responseBody) => {
+        res.status(statusCode).send(responseBody);
+      });
   });
 
   const server = app.listen(
